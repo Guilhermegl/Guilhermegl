@@ -37,7 +37,7 @@
 nome     = "Guilherme de Lima"
 formacao = "ANALISE DE DESENVOLVIMENTO DE SISTEMAS"
 foco     = ["Business Intelligence", "Data Science", "AI"]
-missao   = "Do dado bruto às decisões 
+missao   = "Do dado bruto às decisões"
 ```
 
 Construo sistemas que **transformam dados em vantagem real**. Do scraper ao dashboard, cada linha de código serve a uma decisão de negócio.
