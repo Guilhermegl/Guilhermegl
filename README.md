@@ -35,10 +35,9 @@
 # profile.py
 
 nome     = "Guilherme de Lima"
-formacao = "ADS · Anhanguera"
-foco     = ["Business Intelligence",
-            "Data Science", "AI"]
-missao   = "Do dado bruto à decisão"
+formacao = "ANALISE DE DESENVOLVIMENTO DE SISTEMAS"
+foco     = ["Business Intelligence", "Data Science", "AI"]
+missao   = "Do dado bruto às decisões 
 ```
 
 Construo sistemas que **transformam dados em vantagem real**. Do scraper ao dashboard, cada linha de código serve a uma decisão de negócio.
@@ -107,7 +106,7 @@ Construo sistemas que **transformam dados em vantagem real**. Do scraper ao dash
 <td width="50%" valign="top">
 
 **MarketPulse**
-> Dashboard financeiro — B3, cripto, notícias com análise Groq. Coleta em background e atualização automática.
+> Dashboard financeiro — B3, cripto, notícias com análise Groq. Coleta em background e atualização automática. - temporariamente parado 🚧
 
 `Python` `Flask` `BeautifulSoup` `CoinGecko` `Chart.js`
 
