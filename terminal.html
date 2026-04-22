@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GL://TERMINAL — Guilherme de Lima</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --cyan: #00d4ff;
+    --cyan-dim: rgba(0,212,255,0.15);
+    --cyan-glow: rgba(0,212,255,0.4);
+    --blue: #8ab4f8;
+    --orange: #ff6b35;
+    --green: #39ff14;
+    --red: #ff4444;
+    --bg: #060a0f;
+    --bg2: #0a1628;
+    --bg3: #0d1f38;
+    --border: rgba(0,212,255,0.25);
+    --text: #c9d8f0;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    height: 100vh;
+    overflow: hidden;
+    cursor: none;
+  }
+
+  /* CUSTOM CURSOR */
+  #cursor {
+    position: fixed;
+    width: 20px; height: 20px;
+    border: 2px solid var(--cyan);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+    transition: transform 0.1s, background 0.2s;
+    mix-blend-mode: screen;
+  }
+  #cursor-dot {
+    position: fixed;
+    width: 4px; height: 4px;
+    background: var(--cyan);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+  }
+
+  /* GRID BACKGROUND */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* SCANLINES */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* HEADER BAR */
+  #header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    z-index: 10;
+  }
+  #header-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--cyan);
+    letter-spacing: 3px;
+    text-shadow: 0 0 20px var(--cyan-glow);
+  }
+  #header-status {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--blue);
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; }
+    50% { opacity:0.4; }
+  }
+  .win-btn {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: inline-block;
+  }
+
+  /* MAIN LAYOUT */
+  #main {
+    display: flex;
+    height: calc(100vh - 45px);
+  }
+
+  /* SIDEBAR */
+  #sidebar {
+    width: 220px;
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 10;
+  }
+  .sidebar-section {
+    padding: 6px 20px;
+    font-size: 10px;
+    color: rgba(138,180,248,0.5);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 12px;
+  }
+  .sidebar-cmd {
+    padding: 8px 20px;
+    font-size: 12px;
+    color: var(--blue);
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 2px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sidebar-cmd:hover, .sidebar-cmd.active {
+    background: var(--cyan-dim);
+    border-left-color: var(--cyan);
+    color: var(--cyan);
+  }
+  .sidebar-cmd .icon { font-size: 14px; }
+
+  /* TERMINAL */
+  #terminal-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* MATRIX RAIN CANVAS */
+  #matrix-canvas {
+    position: absolute;
+    inset: 0;
+    opacity: 0.04;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #terminal {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 30px;
+    position: relative;
+    z-index: 5;
+    scroll-behavior: smooth;
+  }
+  #terminal::-webkit-scrollbar { width: 4px; }
+  #terminal::-webkit-scrollbar-track { background: transparent; }
+  #terminal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* OUTPUT LINES */
+  .line { 
+    line-height: 1.7;
+    animation: fadeIn 0.15s ease;
+  }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(2px); } to { opacity:1; transform: none; } }
+
+  .prompt { color: var(--cyan); }
+  .prompt-user { color: var(--green); }
+  .prompt-at { color: var(--blue); }
+  .cmd-text { color: #fff; }
+  .output { color: var(--text); padding-left: 4px; }
+  .output-cyan { color: var(--cyan); }
+  .output-blue { color: var(--blue); }
+  .output-orange { color: var(--orange); }
+  .output-green { color: var(--green); }
+  .output-red { color: var(--red); }
+  .output-dim { color: rgba(201,216,240,0.4); }
+  .output-bold { font-weight: 700; }
+  .empty { height: 8px; }
+
+  /* ASCII ART */
+  .ascii { 
+    color: var(--cyan); 
+    font-size: 11px; 
+    line-height: 1.3;
+    text-shadow: 0 0 15px var(--cyan-glow);
+    white-space: pre;
+  }
+
+  /* CARDS */
+  .project-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 6px 0;
+    background: var(--cyan-dim);
+    transition: all 0.2s;
+  }
+  .project-card:hover {
+    border-color: var(--cyan);
+    background: rgba(0,212,255,0.08);
+    box-shadow: 0 0 20px rgba(0,212,255,0.1);
+  }
+
+  /* PROGRESS BARS */
+  .skill-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 4px 0;
+  }
+  .skill-name { width: 100px; color: var(--blue); font-size: 12px; }
+  .bar-bg { 
+    flex: 1; 
+    height: 6px; 
+    background: rgba(255,255,255,0.05);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--cyan), var(--blue));
+    box-shadow: 0 0 8px var(--cyan-glow);
+    transition: width 1s ease;
+    width: 0%;
+  }
+  .bar-pct { width: 36px; text-align: right; color: var(--cyan); font-size: 11px; }
+
+  /* INPUT AREA */
+  #input-area {
+    border-top: 1px solid var(--border);
+    padding: 14px 30px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg2);
+    position: relative;
+    z-index: 10;
+  }
+  #input-prompt {
+    color: var(--cyan);
+    font-size: 13px;
+    white-space: nowrap;
+    text-shadow: 0 0 10px var(--cyan-glow);
+  }
+  #cmd-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    caret-color: var(--cyan);
+  }
+
+  /* GLITCH EFFECT */
+  @keyframes glitch {
+    0%,100% { text-shadow: 0 0 15px var(--cyan-glow); transform: none; }
+    20% { text-shadow: -2px 0 var(--red), 2px 0 var(--blue); transform: skew(-0.5deg); }
+    40% { text-shadow: 2px 0 var(--orange), -2px 0 var(--cyan); transform: none; }
+    60% { text-shadow: 0 0 20px var(--cyan-glow); }
+  }
+
+  /* BOOT SCREEN */
+  #boot-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    transition: opacity 0.5s;
+  }
+  #boot-logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 48px;
+    font-weight: 900;
+    color: var(--cyan);
+    text-shadow: 0 0 40px var(--cyan-glow);
+    animation: glitch 3s infinite;
+    letter-spacing: 8px;
+  }
+  .boot-bar-wrap {
+    width: 320px;
+    height: 2px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  #boot-progress {
+    height: 100%;
+    background: linear-gradient(90deg, var(--cyan), var(--blue));
+    box-shadow: 0 0 12px var(--cyan);
+    width: 0%;
+    transition: width 0.1s;
+  }
+  #boot-msg {
+    font-size: 12px;
+    color: var(--blue);
+    letter-spacing: 2px;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 600px) {
+    #sidebar { display: none; }
+    #terminal { padding: 16px; }
+    .ascii { font-size: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- CUSTOM CURSOR -->
+<div id="cursor"></div>
+<div id="cursor-dot"></div>
+
+<!-- BOOT SCREEN -->
+<div id="boot-screen">
+  <div id="boot-logo">GL://OS</div>
+  <div class="boot-bar-wrap"><div id="boot-progress"></div></div>
+  <div id="boot-msg">INITIALIZING SYSTEM...</div>
+</div>
+
+<!-- HEADER -->
+<div id="header">
+  <div id="header-title">GL://TERMINAL v2.4.1</div>
+  <div id="header-status">
+    <span style="display:flex;align-items:center;gap:6px;">
+      <span class="status-dot"></span>
+      <span>ONLINE</span>
+    </span>
+    <span id="clock"></span>
+    <span style="display:flex;gap:6px;">
+      <span class="win-btn" style="background:#ff5f57;"></span>
+      <span class="win-btn" style="background:#febc2e;"></span>
+      <span class="win-btn" style="background:#28c840;"></span>
+    </span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="sidebar-section">// COMANDOS</div>
+    <div class="sidebar-cmd" onclick="runCmd('about')"><span class="icon">👤</span> about</div>
+    <div class="sidebar-cmd" onclick="runCmd('skills')"><span class="icon">⚡</span> skills</div>
+    <div class="sidebar-cmd" onclick="runCmd('projects')"><span class="icon">🚀</span> projects</div>
+    <div class="sidebar-cmd" onclick="runCmd('stack')"><span class="icon">🔧</span> stack</div>
+    <div class="sidebar-cmd" onclick="runCmd('roadmap')"><span class="icon">🗺️</span> roadmap</div>
+    <div class="sidebar-cmd" onclick="runCmd('contact')"><span class="icon">📡</span> contact</div>
+    <div class="sidebar-section">// EXTRAS</div>
+    <div class="sidebar-cmd" onclick="runCmd('matrix')"><span class="icon">🌐</span> matrix</div>
+    <div class="sidebar-cmd" onclick="runCmd('hire')"><span class="icon">💼</span> hire me</div>
+    <div class="sidebar-cmd" onclick="runCmd('clear')"><span class="icon">🗑️</span> clear</div>
+    <div class="sidebar-cmd" onclick="runCmd('help')"><span class="icon">❓</span> help</div>
+  </div>
+
+  <!-- TERMINAL -->
+  <div id="terminal-wrapper">
+    <canvas id="matrix-canvas"></canvas>
+    <div id="terminal"></div>
+    <div id="input-area">
+      <span id="input-prompt"><span style="color:var(--green)">guilherme</span><span style="color:var(--blue)">@</span><span style="color:var(--cyan)">GL-OS</span><span style="color:var(--blue)">:~$</span></span>
+      <input id="cmd-input" type="text" autocomplete="off" spellcheck="false" placeholder="digite um comando..."/>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CURSOR ──────────────────────────────────────────────────
+const cursor = document.getElementById('cursor');
+const cursorDot = document.getElementById('cursor-dot');
+document.addEventListener('mousemove', e => {
+  cursor.style.left = e.clientX + 'px';
+  cursor.style.top = e.clientY + 'px';
+  cursorDot.style.left = e.clientX + 'px';
+  cursorDot.style.top = e.clientY + 'px';
+});
+
+// ── CLOCK ────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('pt-BR');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── MATRIX RAIN ──────────────────────────────────────────────
+const canvas = document.getElementById('matrix-canvas');
+const ctx = canvas.getContext('2d');
+let matrixActive = false;
+let matrixOpacity = 0.04;
+
+function resizeCanvas() {
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*ﾊﾋｼﾅﾓﾆｻﾜｵﾘｿﾡﾣﾊﾋ';
+const fontSize = 13;
+let drops = [];
+
+function initDrops() {
+  const cols = Math.floor(canvas.width / fontSize);
+  drops = Array(cols).fill(0).map(() => Math.random() * -100);
+}
+initDrops();
+
+function drawMatrix() {
+  ctx.fillStyle = `rgba(6,10,15,${matrixActive ? 0.03 : 0.08})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = matrixActive ? '#00ff41' : '#00d4ff';
+  ctx.font = fontSize + 'px JetBrains Mono';
+  drops.forEach((y, i) => {
+    const char = chars[Math.floor(Math.random() * chars.length)];
+    ctx.fillText(char, i * fontSize, y * fontSize);
+    if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  });
+}
+setInterval(drawMatrix, 60);
+
+// ── TERMINAL ENGINE ──────────────────────────────────────────
+const terminal = document.getElementById('terminal');
+const input = document.getElementById('cmd-input');
+let history = [];
+let histIndex = -1;
+
+function print(html, cls = 'line') {
+  const el = document.createElement('div');
+  el.className = cls;
+  el.innerHTML = html;
+  terminal.appendChild(el);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function empty() { print('', 'empty'); }
+
+function prompt(cmd) {
+  print(`<span class="prompt"><span style="color:var(--green)">guilherme</span><span style="color:var(--blue)">@</span><span style="color:var(--cyan)">GL-OS</span><span style="color:var(--blue)">:~$</span></span> <span class="cmd-text">${cmd}</span>`);
+}
+
+// ── COMMANDS ─────────────────────────────────────────────────
+const commands = {
+
+  help: () => {
+    empty();
+    print(`<span class="output-cyan output-bold">╔══════════════════════════════════════╗</span>`);
+    print(`<span class="output-cyan output-bold">║       GL://OS — MANUAL DE USO        ║</span>`);
+    print(`<span class="output-cyan output-bold">╚══════════════════════════════════════╝</span>`);
+    empty();
+    const cmds = [
+      ['about',    'Quem sou eu e o que faço'],
+      ['skills',   'Mapa de habilidades com nível'],
+      ['projects', 'Projetos em destaque'],
+      ['stack',    'Tecnologias que uso'],
+      ['roadmap',  'Plano de carreira e certs'],
+      ['contact',  'Como me encontrar'],
+      ['matrix',   'Ativar modo matrix'],
+      ['hire',     'Por que me contratar?'],
+      ['clear',    'Limpar terminal'],
+    ];
+    cmds.forEach(([c, d]) => {
+      print(`  <span class="output-cyan" style="display:inline-block;width:100px">${c}</span><span class="output-dim">→</span> <span class="output">${d}</span>`);
+    });
+    empty();
+    print(`<span class="output-dim">// Use os botões na sidebar ou digite diretamente.</span>`);
+    empty();
+  },
+
+  about: () => {
+    empty();
+    print(`<span class="ascii">
+  ██████╗ ██╗
+ ██╔════╝ ██║
+ ██║  ███╗██║
+ ██║   ██║██║
+ ╚██████╔╝███████╗
+  ╚═════╝ ╚══════╝</span>`);
+    empty();
+    print(`<span class="output-cyan output-bold">GUILHERME DE LIMA</span>`);
+    print(`<span class="output-blue">Data Engineer & BI Developer</span>`);
+    empty();
+    print(`<span class="output-dim">┌─ IDENTIFICAÇÃO ──────────────────────────────</span>`);
+    print(`<span class="output-dim">│</span>`);
+    print(`<span class="output-dim">│</span> <span class="output-blue">Base:</span>      <span class="output">Brasil 🇧🇷</span>`);
+    print(`<span class="output-dim">│</span> <span class="output-blue">Formação:</span>  <span class="output">ADS — Anhanguera</span>`);
+    print(`<span class="output-dim">│</span> <span class="output-blue">Foco:</span>      <span class="output">BI · Data Science · AI · Full-Stack</span>`);
+    print(`<span class="output-dim">│</span> <span class="output-blue">Status:</span>    <span class="output-green">● ABERTO A OPORTUNIDADES</span>`);
+    print(`<span class="output-dim">│</span>`);
+    print(`<span class="output-dim">└──────────────────────────────────────────────</span>`);
+    empty();
+    print(`<span class="output">Construo plataformas que cruzam dados, inteligência de negócio</span>`);
+    print(`<span class="output">e automação. Do backend ao dashboard, cada linha serve a uma decisão.</span>`);
+    empty();
+    print(`<span class="output-dim">// "Dados sem contexto são ruído. Contexto sem dados é opinião."</span>`);
+    empty();
+  },
+
+  skills: () => {
+    empty();
+    print(`<span class="output-cyan output-bold">[ SKILL MATRIX — GL://SYSTEM ]</span>`);
+    empty();
+    print(`<span class="output-blue">▸ DATA & ANALYTICS</span>`);
+    empty();
+    const dataSkills = [
+      ['Python',    92],
+      ['SQL',       88],
+      ['Power BI',  85],
+      ['Pandas',    82],
+      ['Plotly',    78],
+    ];
+    dataSkills.forEach(([name, pct]) => {
+      const id = 'bar-' + Math.random().toString(36).slice(2);
+      print(`
+        <div class="skill-bar">
+          <span class="skill-name">${name}</span>
+          <div class="bar-bg"><div class="bar-fill" id="${id}"></div></div>
+          <span class="bar-pct">${pct}%</span>
+        </div>
+      `);
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) el.style.width = pct + '%';
+      }, 300);
+    });
+    empty();
+    print(`<span class="output-blue">▸ WEB & BACKEND</span>`);
+    empty();
+    const webSkills = [
+      ['FastAPI',     80],
+      ['JavaScript',  75],
+      ['HTML/CSS',    85],
+      ['Flask',       72],
+      ['Selenium',    70],
+    ];
+    webSkills.forEach(([name, pct]) => {
+      const id = 'bar-' + Math.random().toString(36).slice(2);
+      print(`
+        <div class="skill-bar">
+          <span class="skill-name">${name}</span>
+          <div class="bar-bg"><div class="bar-fill" id="${id}" style="background:linear-gradient(90deg,var(--orange),var(--red))"></div></div>
+          <span class="bar-pct">${pct}%</span>
+        </div>
+      `);
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) el.style.width = pct + '%';
+      }, 300);
+    });
+    empty();
+  },
+
+  projects: () => {
+    empty();
+    print(`<span class="output-cyan output-bold">[ DEPLOYED SYSTEMS ]</span>`);
+    empty();
+
+    const projects = [
+      {
+        code: 'SYS-01',
+        name: 'TRAMPO INTELLIGENCE',
+        sub: 'Motor de compatibilidade de vagas com IA',
+        desc: 'Plataforma que analisa seu perfil, calcula score de compatibilidade com vagas, mapeia gaps de skills e agrega listings em tempo real de múltiplas fontes.',
+        tags: ['FastAPI', 'Python', 'Chart.js', 'Web Scraping', 'NLP'],
+        url: 'https://github.com/Guilhermegl',
+        color: 'var(--cyan)'
+      },
+      {
+        code: 'SYS-02',
+        name: 'DATANAÇÃO',
+        sub: 'Painel de inteligência pública brasileira',
+        desc: 'Dashboard geoespacial com dados do IBGE, BCB, IPEA e Portal da Transparência. Visualiza o Brasil em tempo real: inflação, PIB, empregos, gastos federais.',
+        tags: ['Python', 'Dash', 'Plotly', 'Folium', 'SQLite'],
+        url: 'https://github.com/Guilhermegl',
+        color: 'var(--green)'
+      },
+      {
+        code: 'SYS-03',
+        name: 'FINITECH TERMINAL',
+        sub: 'OS financeiro para o mercado brasileiro',
+        desc: 'Plataforma com 11 módulos: B3, cripto, câmbio, notícias com análise LLaMA 3.1 e coleta automatizada 24/7 via APScheduler.',
+        tags: ['Flask', 'yfinance', 'Groq API', 'JavaScript', 'BCB'],
+        url: 'https://github.com/Guilhermegl/FINITECH',
+        color: 'var(--orange)'
+      },
+      {
+        code: 'SYS-04',
+        name: 'FINCTR PWA',
+        sub: 'Controle financeiro pessoal offline-first',
+        desc: 'PWA completa: parcelas, cartão de crédito com faturas futuras, reservas, metas e exportação PDF. Zero backend, 100% local.',
+        tags: ['HTML', 'CSS', 'JavaScript', 'PWA', 'Netlify'],
+        url: 'https://github.com/Guilhermegl/Financas-app',
+        color: 'var(--blue)'
+      },
+    ];
+
+    projects.forEach(p => {
+      print(`
+        <div class="project-card" style="border-color:${p.color}22;cursor:pointer" onclick="window.open('${p.url}','_blank')">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+            <span style="color:${p.color};font-weight:700;font-size:13px">${p.code} // ${p.name}</span>
+            <span style="color:var(--cyan);font-size:11px;opacity:0.6">↗ OPEN</span>
+          </div>
+          <div style="color:var(--blue);font-size:11px;margin-bottom:6px">${p.sub}</div>
+          <div style="color:var(--text);font-size:12px;line-height:1.6;margin-bottom:8px">${p.desc}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">${p.tags.map(t=>`<span style="background:rgba(255,255,255,0.05);border:1px solid ${p.color}33;color:${p.color};padding:2px 8px;border-radius:3px;font-size:10px">${t}</span>`).join('')}</div>
+        </div>
+      `);
+    });
+    empty();
+    print(`<span class="output-dim">// Clique em qualquer projeto para abrir o repositório.</span>`);
+    empty();
+  },
+
+  stack: () => {
+    empty();
+    print(`<span class="output-cyan output-bold">[ TECH STACK — INVENTÁRIO ]</span>`);
+    empty();
+    const stacks = {
+      'DATA': ['Python 🐍', 'SQL 🗄️', 'Power BI 📊', 'Pandas', 'Plotly', 'Dash', 'Folium'],
+      'BACKEND': ['FastAPI ⚡', 'Flask 🌶️', 'SQLite', 'APScheduler', 'Selenium'],
+      'FRONTEND': ['HTML5', 'CSS3', 'JavaScript', 'Chart.js', 'PWA'],
+      'INFRA': ['Git', 'GitHub', 'Netlify', 'GitHub Actions'],
+      'AI/APIs': ['Groq (LLaMA)', 'Anthropic Claude', 'Jooble', 'Adzuna', 'BCB Open Data'],
+    };
+    Object.entries(stacks).forEach(([cat, items]) => {
+      print(`  <span class="output-blue">▸ ${cat}</span>`);
+      print(`  <span class="output-dim">${items.join('  ·  ')}</span>`);
+      empty();
+    });
+  },
+
+  roadmap: () => {
+    empty();
+    print(`<span class="output-cyan output-bold">[ MISSÃO DE CARREIRA — LOG ]</span>`);
+    empty();
+    const items = [
+      ['✅', 'var(--green)',  'Administrador de BD — IFRS (200h)'],
+      ['✅', 'var(--green)',  'KDD: Descoberta de Conhecimento — IFRS'],
+      ['🔄', 'var(--orange)', 'Google Data Analytics Certificate — Coursera'],
+      ['🔄', 'var(--orange)', 'Microsoft PL-300 Power BI — em andamento'],
+      ['🎯', 'var(--blue)',   'Pós-Grad: Ciência de Dados — PUC Minas EAD'],
+      ['🎯', 'var(--blue)',   'Portfólio BI/DS consolidado no GitHub'],
+      ['🚀', 'var(--cyan)',   'Vaga em Data/BI em empresa de impacto'],
+    ];
+    items.forEach(([icon, color, text]) => {
+      print(`  <span style="color:${color}">${icon}  ${text}</span>`);
+    });
+    empty();
+    print(`<span class="output-dim">// ETA para próxima certificação: Q2 2025</span>`);
+    empty();
+  },
+
+  contact: () => {
+    empty();
+    print(`<span class="output-cyan output-bold">[ CANAL DE CONTATO ]</span>`);
+    empty();
+    print(`<span class="output-dim">┌──────────────────────────────────────────────────┐</span>`);
+    print(`<span class="output-dim">│</span>  <span class="output-blue">GitHub</span>    <span class="output-cyan" style="cursor:pointer" onclick="window.open('https://github.com/Guilhermegl','_blank')">→ github.com/Guilhermegl ↗</span>            <span class="output-dim">│</span>`);
+    print(`<span class="output-dim">│</span>  <span class="output-blue">LinkedIn</span>  <span class="output-cyan" style="cursor:pointer" onclick="window.open('https://www.linkedin.com/in/guilherme-lima-gg/','_blank')">→ linkedin.com/in/guilherme-lima-gg ↗</span> <span class="output-dim">│</span>`);
+    print(`<span class="output-dim">│</span>  <span class="output-blue">Email</span>     <span class="output-cyan" style="cursor:pointer" onclick="window.open('https://mail.google.com/mail/u/0/#inbox','_blank')">→ Abrir Gmail ↗</span>                       <span class="output-dim">│</span>`);
+    print(`<span class="output-dim">│</span>                                                  <span class="output-dim">│</span>`);
+    print(`<span class="output-dim">│</span>  <span class="output-green">● STATUS: ABERTO A OPORTUNIDADES</span>               <span class="output-dim">│</span>`);
+    print(`<span class="output-dim">└──────────────────────────────────────────────────┘</span>`);
+    empty();
+    print(`<span class="output-dim">// Respondo em até 24h. Prefiro LinkedIn para recrutadores.</span>`);
+    empty();
+  },
+
+  matrix: () => {
+    empty();
+    matrixActive = !matrixActive;
+    canvas.style.opacity = matrixActive ? '0.3' : '0.04';
+    if (matrixActive) {
+      initDrops();
+      print(`<span class="output-green">[ MODO MATRIX ATIVADO — "There is no spoon." ]</span>`);
+      print(`<span class="output-dim">// Digite 'matrix' novamente para desativar.</span>`);
+    } else {
+      print(`<span class="output-cyan">[ MODO NORMAL RESTAURADO ]</span>`);
+    }
+    empty();
+  },
+
+  hire: () => {
+    empty();
+    print(`<span class="output-cyan output-bold">[ WHY HIRE GL:// ? ]</span>`);
+    empty();
+    print(`<span class="output-orange">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>`);
+    empty();
+    const reasons = [
+      ['01', 'Entrego do dado à decisão', 'Não apenas dashboards bonitos. Sistemas que mudam como o negócio opera.'],
+      ['02', 'Full-stack de dados', 'Backend, scraping, modelagem, visualização. Uma pessoa, o ciclo completo.'],
+      ['03', 'Portfólio real, não tutorial', 'Projetos que resolvem problemas reais: vagas, finanças, dados públicos.'],
+      ['04', 'Aprendo em público', 'Certificações, GitHub ativo, documentação clara. Compromisso verificável.'],
+      ['05', 'Disponível agora', 'Sem aviso de 30 dias. Pronto para embarcar.'],
+    ];
+    reasons.forEach(([n, title, desc]) => {
+      print(`  <span class="output-cyan">[${n}]</span> <span class="output-bold" style="color:#fff">${title}</span>`);
+      print(`       <span class="output-dim">${desc}</span>`);
+      empty();
+    });
+    print(`<span class="output-orange">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>`);
+    empty();
+    print(`<span class="output-green output-bold">  → Digite 'contact' para iniciar uma conversa.</span>`);
+    empty();
+  },
+
+  clear: () => {
+    terminal.innerHTML = '';
+    bootWelcome();
+  },
+};
+
+function bootWelcome() {
+  print(`<span class="ascii">
+   ██████╗ ██╗         ██████╗ ███████╗
+  ██╔════╝ ██║        ██╔═══██╗██╔════╝
+  ██║  ███╗██║        ██║   ██║███████╗
+  ██║   ██║██║        ██║   ██║╚════██║
+  ╚██████╔╝███████╗   ╚██████╔╝███████║
+   ╚═════╝ ╚══════╝    ╚═════╝ ╚══════╝</span>`);
+  empty();
+  print(`  <span class="output-cyan output-bold">GL://OS</span> <span class="output-dim">— Sistema de Portfólio Interativo v2.4.1</span>`);
+  print(`  <span class="output-dim">Guilherme de Lima · Data & BI Engineer · Brasil 🇧🇷</span>`);
+  empty();
+  print(`  <span class="output-dim">Digite</span> <span class="output-cyan">help</span> <span class="output-dim">para ver os comandos disponíveis.</span>`);
+  print(`  <span class="output-dim">Ou use a sidebar para navegar diretamente.</span>`);
+  empty();
+  print(`<span class="output-dim">──────────────────────────────────────────────────────</span>`);
+  empty();
+}
+
+function runCmd(raw) {
+  const cmd = raw.trim().toLowerCase();
+  if (!cmd) return;
+
+  // highlight sidebar
+  document.querySelectorAll('.sidebar-cmd').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.sidebar-cmd').forEach(el => {
+    if (el.textContent.trim().includes(cmd)) el.classList.add('active');
+  });
+
+  prompt(raw.trim());
+  history.unshift(cmd);
+  histIndex = -1;
+
+  if (commands[cmd]) {
+    commands[cmd]();
+  } else {
+    empty();
+    print(`<span class="output-red">bash: comando não encontrado: '${cmd}'</span>`);
+    print(`<span class="output-dim">// Digite 'help' para ver os comandos disponíveis.</span>`);
+    empty();
+  }
+
+  input.value = '';
+  input.focus();
+}
+
+// Input handling
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    runCmd(input.value);
+  } else if (e.key === 'ArrowUp') {
+    histIndex = Math.min(histIndex + 1, history.length - 1);
+    input.value = history[histIndex] || '';
+    e.preventDefault();
+  } else if (e.key === 'ArrowDown') {
+    histIndex = Math.max(histIndex - 1, -1);
+    input.value = histIndex >= 0 ? history[histIndex] : '';
+    e.preventDefault();
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    const partial = input.value.toLowerCase();
+    const match = Object.keys(commands).find(c => c.startsWith(partial));
+    if (match) input.value = match;
+  }
+});
+
+// ── BOOT SEQUENCE ────────────────────────────────────────────
+const bootScreen = document.getElementById('boot-screen');
+const bootProgress = document.getElementById('boot-progress');
+const bootMsg = document.getElementById('boot-msg');
+
+const bootMessages = [
+  'LOADING DATA MODULES...',
+  'INITIALIZING BI ENGINE...',
+  'CONNECTING TO GL://NETWORK...',
+  'MOUNTING PROJECT DATABASE...',
+  'SYSTEM READY.',
+];
+
+let pct = 0;
+let msgIdx = 0;
+const bootInterval = setInterval(() => {
+  pct += Math.random() * 18 + 4;
+  if (pct > 100) pct = 100;
+  bootProgress.style.width = pct + '%';
+  bootMsg.textContent = bootMessages[Math.min(msgIdx++, bootMessages.length - 1)];
+  if (pct >= 100) {
+    clearInterval(bootInterval);
+    setTimeout(() => {
+      bootScreen.style.opacity = '0';
+      setTimeout(() => {
+        bootScreen.style.display = 'none';
+        bootWelcome();
+        input.focus();
+      }, 500);
+    }, 400);
+  }
+}, 180);
+</script>
+</body>
+</html>
